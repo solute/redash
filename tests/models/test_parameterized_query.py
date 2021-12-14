@@ -37,12 +37,6 @@ class TestParameterizedQuery(TestCase):
         ).apply({"param": "value", "table": "value"})
         self.assertEqual(set(["test", "nested_param"]), query.missing_params)
 
-    def test_handles_objects(self):
-        query = ParameterizedQuery(
-            "SELECT * FROM USERS WHERE created_at between '{{ created_at.start }}' and '{{ created_at.end }}'"
-        ).apply({"created_at": {"start": 1, "end": 2}})
-        self.assertEqual(set([]), query.missing_params)
-
     def test_raises_on_parameters_not_in_schema(self):
         schema = [{"name": "bar", "type": "text"}]
         query = ParameterizedQuery("foo", schema)
@@ -167,7 +161,7 @@ class TestParameterizedQuery(TestCase):
 
         query.apply({"bar": ["qux", "baz"]})
 
-        self.assertEqual("foo 'qux','baz'", query.text)
+        assert "foo 'qux','baz'" == query.text
 
     @patch(
         "redash.models.parameterized_query.dropdown_values",

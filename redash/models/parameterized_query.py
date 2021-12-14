@@ -1,3 +1,4 @@
+import logging
 from functools import partial
 from numbers import Number
 
@@ -6,6 +7,9 @@ from dateutil.parser import parse
 from funcy import distinct
 
 from redash.utils import mustache_render
+
+
+logger = logging.getLogger(__name__)
 
 
 def _pluck_name_and_value(default_column, row):
@@ -35,19 +39,12 @@ def dropdown_values(query_id, org):
     return list(map(pluck, data["rows"]))
 
 
-def join_parameter_list_values(parameters, schema):
-    updated_parameters = {}
-    for key, value in parameters.items():
-        if isinstance(value, list):
-            definition = next((definition for definition in schema if definition["name"] == key), {})
-            multi_values_options = definition.get("multiValuesOptions", {})
-            separator = str(multi_values_options.get("separator", ","))
-            prefix = str(multi_values_options.get("prefix", ""))
-            suffix = str(multi_values_options.get("suffix", ""))
-            updated_parameters[key] = separator.join([prefix + v + suffix for v in value])
-        else:
-            updated_parameters[key] = value
-    return updated_parameters
+def _join_list_values(definition, values):
+    multi_values_options = definition.get("multiValuesOptions", {})
+    separator = str(multi_values_options.get("separator", ","))
+    prefix = str(multi_values_options.get("prefix", ""))
+    suffix = str(multi_values_options.get("suffix", ""))
+    return separator.join(prefix + v + suffix for v in values)
 
 
 def _collect_key_names(nodes):
@@ -80,27 +77,61 @@ def _parameter_names(parameter_values):
     return names
 
 
-def _is_number(string):
-    if isinstance(string, Number):
-        return True
-    else:
-        float(string)
-        return True
+def _handle_text(definition, value):
+    if not isinstance(value, str):
+        raise ValueError("Not a string: {!r}".format(value))
+    return value
 
 
-def _is_date(string):
-    parse(string)
-    return True
+def _handle_number(definition, value):
+    try:
+        if isinstance(value, Number):
+            return value
+        return float(value)
+    except (ValueError, TypeError):
+        raise ValueError("Could not parse float from value: {!r}".format(value))
 
 
-def _is_date_range(obj):
-    return _is_date(obj["start"]) and _is_date(obj["end"])
+def _handle_date(definition, value):
+    try:
+        parse(value)
+        return value
+    except (ValueError, TypeError):
+        raise ValueError("Could not parse date from value {!r}".format(value))
 
 
-def _is_value_within_options(value, dropdown_options, allow_list=False):
-    if isinstance(value, list):
-        return allow_list and set(map(str, value)).issubset(set(dropdown_options))
-    return str(value) in dropdown_options
+def _handle_date_range(definition, obj):
+    if not isinstance(obj, dict) or not "start" in obj or not "end" in obj:
+        raise ValueError("Mismatched date range format, need dict with start and end: {!r}".format(obj))
+
+    return {
+        "start":_handle_date(definition, obj["start"]),
+        "end": _handle_date(definition, obj["end"]),
+    }
+
+
+def _handle_options(options_getter):
+    def _handle_options_wrapper(definition, value):
+        allow_multiple_values = isinstance(definition.get("multiValuesOptions"), dict)
+        options = set(options_getter(definition, value))
+
+        if isinstance(value, list):
+            values = [str(_) for _ in value]
+
+            if not allow_multiple_values:
+                raise ValueError("Multi values not allowed, got {!r}".format(value))
+
+            if not set(values).issubset(options):
+                raise ValueError("Got invalid values for enum {!r}".format(set(values).difference(options)))
+
+            return _join_list_values(definition, values)
+        else:
+            value = str(value)
+            if not str(value) in options:
+                raise ValueError("Got invalid value for enum {!r}".format(value))
+
+            return value
+    return _handle_options_wrapper
 
 
 class ParameterizedQuery(object):
@@ -112,18 +143,26 @@ class ParameterizedQuery(object):
         self.parameters = {}
 
     def apply(self, parameters):
-        invalid_parameter_names = [key for (key, value) in parameters.items() if not self._valid(key, value)]
+        invalid_parameter_names = []
+        parameters = dict(parameters)
+        for name, value in parameters.items():
+            try:
+                parameters[name] = self._handle(name, value)
+            except (ValueError, TypeError):
+                logger.warning("Failed parameter validation", exc_info=True)
+                invalid_parameter_names.append(name)
+
         if invalid_parameter_names:
             raise InvalidParameterError(invalid_parameter_names)
         else:
             self.parameters.update(parameters)
-            self.query = mustache_render(self.template, join_parameter_list_values(parameters, self.schema))
+            self.query = mustache_render(self.template, parameters)
 
         return self
 
-    def _valid(self, name, value):
+    def _handle(self, name, value):
         if not self.schema:
-            return True
+            return value
 
         definition = next(
             (definition for definition in self.schema if definition["name"] == name),
@@ -131,42 +170,36 @@ class ParameterizedQuery(object):
         )
 
         if not definition:
-            return False
+            raise ValueError("No definition found for parameter: {!r}".format(name))
 
-        enum_options = definition.get("enumOptions")
-        query_id = definition.get("queryId")
-        allow_multiple_values = isinstance(definition.get("multiValuesOptions"), dict)
+        def get_enum_options(definition, value):
+            options = definition.get("enumOptions")
+            if isinstance(options, str):
+                options = options.split("\n")
+            return options
 
-        if isinstance(enum_options, str):
-            enum_options = enum_options.split("\n")
+        def get_query_options(definition, value):
+            return [v["value"] for v in dropdown_values(definition.get("queryId"), self.org)]
 
-        validators = {
-            "text": lambda value: isinstance(value, str),
-            "number": _is_number,
-            "enum": lambda value: _is_value_within_options(value, enum_options, allow_multiple_values),
-            "query": lambda value: _is_value_within_options(
-                value,
-                [v["value"] for v in dropdown_values(query_id, self.org)],
-                allow_multiple_values,
-            ),
-            "date": _is_date,
-            "datetime-local": _is_date,
-            "datetime-with-seconds": _is_date,
-            "date-range": _is_date_range,
-            "datetime-range": _is_date_range,
-            "datetime-range-with-seconds": _is_date_range,
+        handlers = {
+            "text": _handle_text,
+            "number": _handle_number,
+            "enum": _handle_options(get_enum_options),
+            "query": _handle_options(get_query_options),
+            "date": _handle_date,
+            "datetime-local": _handle_date,
+            "datetime-with-seconds": _handle_date,
+            "date-range": _handle_date_range,
+            "datetime-range": _handle_date_range,
+            "datetime-range-with-seconds": _handle_date_range,
         }
 
-        validate = validators.get(definition["type"], lambda x: False)
+        handle = handlers.get(definition["type"])
 
-        try:
-            # multiple error types can be raised here; but we want to convert
-            # all except QueryDetached to InvalidParameterError in `apply`
-            return validate(value)
-        except QueryDetachedFromDataSourceError:
-            raise
-        except Exception:
-            return False
+        if not handle:
+            raise TypeError("Unknown parameter type: {!r}".format(definition["type"]))
+
+        return handle(definition, value)
 
     @property
     def is_safe(self):
