@@ -1,4 +1,4 @@
-import { isArray, isEmpty, includes, intersection, get, map, join, has } from "lodash";
+import { isNull, isArray, isEmpty, includes, intersection, get, map, join, has } from "lodash";
 import Parameter from "./Parameter";
 
 class EnumParameter extends Parameter {
@@ -10,17 +10,18 @@ class EnumParameter extends Parameter {
   }
 
   normalizeValue(value) {
-    if (isEmpty(this.enumOptions)) {
+    if (isEmpty(this.enumOptions) || (isNull(value) && this.optional)) {
       return null;
     }
 
-    const enumOptionsArray = this.enumOptions.split("\n") || [];
+    let enumOptionsArray = this.enumOptions.split("\n") || [];
+
     if (this.multiValuesOptions) {
       if (!isArray(value)) {
         value = [value];
       }
       value = intersection(value, enumOptionsArray);
-    } else if (!value || isArray(value) || !includes(enumOptionsArray, value)) {
+    } else if ((!value && !this.optional) || isArray(value) || !includes(enumOptionsArray, value)) {
       value = enumOptionsArray[0];
     }
 

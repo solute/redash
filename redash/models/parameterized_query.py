@@ -78,12 +78,18 @@ def _parameter_names(parameter_values):
 
 
 def _handle_text(definition, value):
+    if value is None and definition.get("optional"):
+        return None
+
     if not isinstance(value, str):
         raise ValueError("Not a string: {!r}".format(value))
     return value
 
 
 def _handle_number(definition, value):
+    if value is None and definition.get("optional"):
+        return None
+
     try:
         if isinstance(value, Number):
             return value
@@ -93,6 +99,9 @@ def _handle_number(definition, value):
 
 
 def _handle_date(definition, value):
+    if value is None and definition.get("optional"):
+        return None
+
     try:
         parse(value)
         return value
@@ -101,6 +110,9 @@ def _handle_date(definition, value):
 
 
 def _handle_date_range(definition, obj):
+    if obj is None and definition.get("optional"):
+        return {"start": None, "end": None}
+
     if not isinstance(obj, dict) or not "start" in obj or not "end" in obj:
         raise ValueError("Mismatched date range format, need dict with start and end: {!r}".format(obj))
 
@@ -113,20 +125,28 @@ def _handle_date_range(definition, obj):
 def _handle_options(options_getter):
     def _handle_options_wrapper(definition, value):
         allow_multiple_values = isinstance(definition.get("multiValuesOptions"), dict)
-        options = set(options_getter(definition, value))
+        optional = definition.get("optional")
 
         if isinstance(value, list):
-            values = [str(_) for _ in value]
-
             if not allow_multiple_values:
                 raise ValueError("Multi values not allowed, got {!r}".format(value))
 
+            if optional and not value:
+                return None
+
+            values = [str(_) for _ in value]
+
+            options = set(options_getter(definition, value))
             if not set(values).issubset(options):
                 raise ValueError("Got invalid values for enum {!r}".format(set(values).difference(options)))
 
             return _join_list_values(definition, values)
         else:
+            if optional and value is None:
+                return None
+
             value = str(value)
+            options = set(options_getter(definition, value))
             if not str(value) in options:
                 raise ValueError("Got invalid value for enum {!r}".format(value))
 

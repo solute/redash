@@ -37,6 +37,90 @@ class TestParameterizedQuery(TestCase):
         ).apply({"param": "value", "table": "value"})
         self.assertEqual(set(["test", "nested_param"]), query.missing_params)
 
+    def _test_optional(self, schema, input_):
+        query = ParameterizedQuery(
+            "SELECT id, name FROM {{table}}{{#foo}} WHERE foo = {{foo}} {{/foo}};",
+            schema=[dict({"name": "foo", "optional": True}, **schema), {"name": "table", "type": "text"}]
+        ).apply({"foo": input_, "table": "users"})
+        self.assertEqual(query.text, "SELECT id, name FROM users;")
+
+    def test_skips_optional_text_param_with_None(self):
+        self._test_optional({"type": "text"}, None)
+
+    def test_skips_optional_number_param_with_None(self):
+        self._test_optional({"type": "number"}, None)
+
+    def test_skips_optional_number_param_with_0(self):
+        self._test_optional({"type": "number"}, 0)
+
+    def test_skips_optional_date_param_with_None(self):
+        self._test_optional({"type": "date"}, None)
+
+    def test_skips_optional_enum_param_with_None(self):
+        self._test_optional({"type": "enum"}, None)
+
+    def test_skips_optional_enum_multi_param_with_empty_list(self):
+        self._test_optional({"type": "enum", "multiValuesOptions": {}}, [])
+
+    def test_skips_optional_enum_multi_param_with_None(self):
+        self._test_optional({"type": "enum", "multiValuesOptions": {}}, None)
+
+    def test_skips_optional_query_param_with_None(self):
+        self._test_optional({"type": "query"}, None)
+
+    def test_skips_optional_query_multi_param_with_empty_list(self):
+        self._test_optional({"type": "query", "multiValuesOptions": {}}, [])
+
+    def test_skips_optional_query_multi_param_with_None(self):
+        self._test_optional({"type": "query", "multiValuesOptions": {}}, None)
+
+    def test_skips_optional_enum_param_with_empty_list_without_multi_values(self):
+        with pytest.raises(InvalidParameterError):
+            self._test_optional({"type": "enum"}, [])
+
+    def test_skips_optional_query_param_with_empty_list_without_multi_values(self):
+        with pytest.raises(InvalidParameterError):
+            self._test_optional({"type": "query"}, [])
+
+    @patch(
+        "redash.models.parameterized_query.dropdown_values",
+        return_value=[{"value": "1"}],
+    )
+    def test_skips_optional_enum_param_with_empty_string(self, _):
+        with pytest.raises(InvalidParameterError) as e:
+            self._test_optional({"type": "query"}, "")
+
+    def _test_optional_missing(self, schema):
+        query = ParameterizedQuery(
+            "SELECT id, name FROM {{table}}{{#foo}} WHERE foo = {{foo}} {{/foo}};",
+            schema=[dict({"name": "foo", "optional": True}, **schema), {"name": "table", "type": "text"}]
+        ).apply({"table": "users"})
+        self.assertEqual(query.text, "SELECT id, name FROM users;")
+
+    def test_skips_optional_text_param_missing(self):
+        self._test_optional_missing({"type": "text"})
+
+    def test_skips_optional_number_param_missing(self):
+        self._test_optional_missing({"type": "number"})
+
+    def test_skips_optional_number_param_missing(self):
+        self._test_optional_missing({"type": "number"})
+
+    def test_skips_optional_date_param_missing(self):
+        self._test_optional_missing({"type": "date"})
+
+    def test_skips_optional_enum_param_missing(self):
+        self._test_optional_missing({"type": "enum"})
+
+    def test_skips_optional_enum_param_missing(self):
+        self._test_optional_missing({"type": "enum", "multiValuesOptions": {}})
+
+    def test_skips_optional_enum_param_missing(self):
+        self._test_optional_missing({"type": "query"})
+
+    def test_skips_optional_enum_param_missing(self):
+        self._test_optional_missing({"type": "query", "multiValuesOptions": {}})
+
     def test_raises_on_parameters_not_in_schema(self):
         schema = [{"name": "bar", "type": "text"}]
         query = ParameterizedQuery("foo", schema)

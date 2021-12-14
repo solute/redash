@@ -302,7 +302,7 @@ class Parameters {
 
   getMissing() {
     return map(
-      filter(this.get(), p => p.isEmpty),
+      filter(this.get(), p => p.isEmpty && !p.optional),
       i => i.title
     );
   }

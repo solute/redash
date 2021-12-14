@@ -20,6 +20,7 @@ class ParameterValueInput extends React.Component {
   static propTypes = {
     type: PropTypes.string,
     value: PropTypes.any, // eslint-disable-line react/forbid-prop-types
+    optional: PropTypes.bool,
     enumOptions: PropTypes.string,
     queryId: PropTypes.number,
     parameter: PropTypes.any, // eslint-disable-line react/forbid-prop-types
@@ -30,6 +31,7 @@ class ParameterValueInput extends React.Component {
   static defaultProps = {
     type: "text",
     value: null,
+    optional: false,
     enumOptions: "",
     queryId: null,
     parameter: null,
@@ -93,7 +95,15 @@ class ParameterValueInput extends React.Component {
   renderEnumInput() {
     const { enumOptions, parameter } = this.props;
     const { value } = this.state;
-    const enumOptionsArray = enumOptions.split("\n").filter(v => v !== "");
+    const options = map(
+      enumOptions.split("\n").filter(v => v !== ""),
+      opt => ({ label: String(opt), value: opt }),
+    );
+
+    if (this.props.optional && parameter.multiValuesOptions === null) {
+      options.unshift({ label: "Any", value: null });
+    }
+
     // Antd Select doesn't handle null in multiple mode
     const normalize = val => (parameter.multiValuesOptions && val === null ? [] : val);
 
@@ -103,10 +113,10 @@ class ParameterValueInput extends React.Component {
         mode={parameter.multiValuesOptions ? "multiple" : "default"}
         value={normalize(value)}
         onChange={this.onSelect}
-        options={map(enumOptionsArray, opt => ({ label: String(opt), value: opt }))}
+        options={options}
         showSearch
         showArrow
-        notFoundContent={isEmpty(enumOptionsArray) ? "No options available" : null}
+        notFoundContent={isEmpty(options) ? "No options available" : null}
         {...multipleValuesProps}
       />
     );
@@ -121,6 +131,7 @@ class ParameterValueInput extends React.Component {
         mode={parameter.multiValuesOptions ? "multiple" : "default"}
         parameter={parameter}
         value={value}
+        optional={this.props.optional}
         queryId={queryId}
         onSelect={this.onSelect}
         style={{ minWidth: 60 }}

@@ -7,6 +7,7 @@ export default class QueryBasedParameterInput extends React.Component {
   static propTypes = {
     parameter: PropTypes.any, // eslint-disable-line react/forbid-prop-types
     value: PropTypes.any, // eslint-disable-line react/forbid-prop-types
+    optional: PropTypes.bool,
     mode: PropTypes.oneOf(["default", "multiple"]),
     queryId: PropTypes.number,
     onSelect: PropTypes.func,
@@ -15,6 +16,7 @@ export default class QueryBasedParameterInput extends React.Component {
 
   static defaultProps = {
     value: null,
+    optional: false,
     mode: "default",
     parameter: null,
     queryId: null,
@@ -42,6 +44,9 @@ export default class QueryBasedParameterInput extends React.Component {
     if (this.props.value !== prevProps.value) {
       this.setValue(this.props.value);
     }
+    if (this.props.optional !== prevProps.optional) {
+      this._loadOptions(this.props.queryId);
+    }
   }
 
   setValue(value) {
@@ -62,8 +67,10 @@ export default class QueryBasedParameterInput extends React.Component {
   async _loadOptions(queryId) {
     if (queryId && queryId !== this.state.queryId) {
       this.setState({ loading: true });
-      const options = await this.props.parameter.loadDropdownValues();
-
+      let options = await this.props.parameter.loadDropdownValues();
+      if (this.props.optional && this.props.mode !== "multiple") {
+        options.unshift({ name: "Any", value: null });
+      }
       // stale queryId check
       if (this.props.queryId === queryId) {
         this.setState({ options, loading: false }, () => {
@@ -77,7 +84,7 @@ export default class QueryBasedParameterInput extends React.Component {
   }
 
   render() {
-    const { className, mode, onSelect, queryId, value, ...otherProps } = this.props;
+    const { className, mode, onSelect, queryId, value, optional, ...otherProps } = this.props;
     const { loading, options } = this.state;
     return (
       <span>

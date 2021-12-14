@@ -6,6 +6,7 @@ class Parameter {
     this.name = parameter.name;
     this.type = parameter.type;
     this.global = parameter.global; // backward compatibility in Widget service
+    this.optional = parameter.optional;
     this.parentQueryId = parentQueryId;
 
     // Used for meta-parameters (i.e. dashboard-level params)
@@ -80,7 +81,8 @@ class Parameter {
   }
 
   setPendingValue(value) {
-    this.pendingValue = this.normalizeValue(value);
+    const normalized = this.normalizeValue(value);
+    this.pendingValue = normalized;
   }
 
   applyPendingValue() {

@@ -180,6 +180,13 @@ function EditParameterSettingsDialog(props) {
             <Option value="datetime-range-with-seconds">Date and Time Range (with seconds)</Option>
           </Select>
         </Form.Item>
+        <Form.Item label="Optional" {...formItemProps}>
+          <Checkbox
+            defaultChecked={!!param.optional}
+            onChange={e => setParam({ ...param, optional: e.target.checked })}
+            data-test="OptionalCheckbox"
+          />
+        </Form.Item>
         {param.type === "enum" && (
           <Form.Item label="Values" help="Dropdown list values (newline delimited)" {...formItemProps}>
             <Input.TextArea

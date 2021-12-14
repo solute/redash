@@ -158,6 +158,7 @@ export default class Parameters extends React.Component {
         <ParameterValueInput
           type={param.type}
           value={param.normalizedValue}
+          optional={param.optional}
           parameter={param}
           enumOptions={param.enumOptions}
           queryId={param.queryId}
