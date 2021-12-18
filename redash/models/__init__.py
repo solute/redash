@@ -140,6 +140,7 @@ class DataSource(BelongsToOrgMixin, db.Model):
             "paused": self.paused,
             "pause_reason": self.pause_reason,
             "supports_auto_limit": self.query_runner.supports_auto_limit,
+            "supports_escape": self.query_runner.supports_escape,
         }
 
         if all:
@@ -811,8 +812,8 @@ class Query(ChangeTrackingMixin, TimestampMixin, BelongsToOrgMixin, db.Model):
         return self.options.get("parameters", [])
 
     @property
-    def parameterized(self):
-        return ParameterizedQuery(self.query_text, self.parameters, self.org)
+    def parameterized(self, query_text=None):
+        return ParameterizedQuery(query_text or self.query_text, self.parameters, self.org, self.data_source)
 
     @property
     def dashboard_api_keys(self):

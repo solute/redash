@@ -258,6 +258,10 @@ class BaseQueryRunner(object):
     def supports_auto_limit(self):
         return False
 
+    @property
+    def supports_escape(self):
+        return False
+
     def apply_auto_limit(self, query_text, should_apply_auto_limit):
         return query_text
 

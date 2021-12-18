@@ -72,6 +72,7 @@ function EditParameterSettingsDialog(props) {
   const [isNameValid, setIsNameValid] = useState(true);
   const [initialQuery, setInitialQuery] = useState();
 
+  const dataSource = props.dataSource;
   const isNew = !props.parameter.name;
 
   // fetch query by id
@@ -187,6 +188,17 @@ function EditParameterSettingsDialog(props) {
             data-test="OptionalCheckbox"
           />
         </Form.Item>
+
+        {dataSource.supports_escape && ["enum", "text", "query"].includes(param.type) && (
+        <Form.Item label="Escape" {...formItemProps}>
+          <Checkbox
+            defaultChecked={!!param.escape}
+            onChange={e => setParam({ ...param, escape: e.target.checked })}
+            data-test="EscapeCheckbox"
+          />
+        </Form.Item>
+        )}
+
         {param.type === "enum" && (
           <Form.Item label="Values" help="Dropdown list values (newline delimited)" {...formItemProps}>
             <Input.TextArea
@@ -263,6 +275,7 @@ function EditParameterSettingsDialog(props) {
 
 EditParameterSettingsDialog.propTypes = {
   parameter: PropTypes.object.isRequired, // eslint-disable-line react/forbid-prop-types
+  dataSource: PropTypes.object.isRequired,
   dialog: DialogPropType.isRequired,
   existingParams: PropTypes.arrayOf(PropTypes.string),
 };

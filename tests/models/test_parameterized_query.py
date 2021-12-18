@@ -4,6 +4,8 @@ from unittest import TestCase
 import pytest
 from mock import patch
 
+from tests import BaseTestCase
+
 from redash.models.parameterized_query import (
     InvalidParameterError,
     ParameterizedQuery,
@@ -11,8 +13,29 @@ from redash.models.parameterized_query import (
     dropdown_values,
 )
 
+from redash.query_runner import (
+    register,
+    BaseQueryRunner,
+    query_runners,
+)
 
-class TestParameterizedQuery(TestCase):
+class NoEscapeQueryRunner(BaseQueryRunner):
+
+    @classmethod
+    def type(self):
+        return "no_escape"
+
+
+class TestParameterizedQuery(BaseTestCase):
+
+    def setUp(self):
+        super().setUp()
+        register(NoEscapeQueryRunner)
+
+    def tearDown(self):
+        super().tearDown()
+        del query_runners["no_escape"]
+
     def test_returns_empty_list_for_regular_query(self):
         query = ParameterizedQuery("SELECT 1")
         self.assertEqual(set([]), query.missing_params)
@@ -329,6 +352,19 @@ class TestParameterizedQuery(TestCase):
         query = ParameterizedQuery("foo", schema)
 
         self.assertTrue(query.is_safe)
+
+    def test_is_safe_if_text_parameter_is_escaped(self):
+        schema = [{"name": "bar", "type": "text", "escape": True}]
+        query = ParameterizedQuery("foo", schema, org=self.factory.org, data_source=self.factory.data_source)
+
+        self.assertTrue(query.is_safe)
+
+    def test_is_not_safe_if_text_parameter_is_escaped_but_data_source_does_not_support_it(self):
+        schema = [{"name": "bar", "type": "text", "escape": True}]
+        ds = self.factory.create_data_source(type="no_escape")
+        query = ParameterizedQuery("foo", schema, org=self.factory.org, data_source=ds)
+
+        self.assertFalse(query.is_safe)
 
     @patch(
         "redash.models.parameterized_query._load_result",

@@ -338,6 +338,7 @@ function QuerySource(props) {
                       sortable={queryFlags.canEdit}
                       disableUrlUpdate={queryFlags.isNew}
                       parameters={parameters}
+                      dataSource={dataSource}
                       onPendingValuesChange={() => updateParametersDirtyFlag()}
                       onValuesChange={() => {
                         updateParametersDirtyFlag(false);

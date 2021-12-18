@@ -166,14 +166,15 @@ class QueryResultListResource(BaseResource):
         query_id = params.get("query_id", "adhoc")
         parameters = params.get("parameters", collect_parameters_from_request(request.args))
 
-        parameterized_query = ParameterizedQuery(query, org=self.current_org)
-        should_apply_auto_limit = params.get("apply_auto_limit", False)
-
         data_source_id = params.get("data_source_id")
         if data_source_id:
             data_source = models.DataSource.get_by_id_and_org(params.get("data_source_id"), self.current_org)
         else:
             return error_messages["select_data_source"]
+
+        parameterized_query = ParameterizedQuery(query, org=self.current_org, data_source=data_source)
+        should_apply_auto_limit = params.get("apply_auto_limit", False)
+
 
         if not has_access(data_source, self.current_user, not_view_only):
             return error_messages["no_permission"]

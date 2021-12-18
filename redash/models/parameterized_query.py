@@ -39,12 +39,12 @@ def dropdown_values(query_id, org):
     return list(map(pluck, data["rows"]))
 
 
-def _join_list_values(definition, values):
+def _join_list_values(definition, values, data_source):
     multi_values_options = definition.get("multiValuesOptions", {})
     separator = str(multi_values_options.get("separator", ","))
     prefix = str(multi_values_options.get("prefix", ""))
     suffix = str(multi_values_options.get("suffix", ""))
-    return separator.join(prefix + v + suffix for v in values)
+    return separator.join(prefix + _maybe_escape(definition, v, data_source) + suffix for v in values)
 
 
 def _collect_key_names(nodes):
@@ -77,16 +77,23 @@ def _parameter_names(parameter_values):
     return names
 
 
-def _handle_text(definition, value):
+def _maybe_escape(definition, value, data_source):
+    if definition.get("escape") and data_source.query_runner.supports_escape:
+        value = data_source.query_runner.escape_parameter(value)
+    return value
+
+
+def _handle_text(definition, value, data_source):
     if value is None and definition.get("optional"):
         return None
 
     if not isinstance(value, str):
         raise ValueError("Not a string: {!r}".format(value))
-    return value
+
+    return _maybe_escape(definition, value, data_source)
 
 
-def _handle_number(definition, value):
+def _handle_number(definition, value, data_source):
     if value is None and definition.get("optional"):
         return None
 
@@ -98,7 +105,7 @@ def _handle_number(definition, value):
         raise ValueError("Could not parse float from value: {!r}".format(value))
 
 
-def _handle_date(definition, value):
+def _handle_date(definition, value, data_source):
     if value is None and definition.get("optional"):
         return None
 
@@ -109,7 +116,7 @@ def _handle_date(definition, value):
         raise ValueError("Could not parse date from value {!r}".format(value))
 
 
-def _handle_date_range(definition, obj):
+def _handle_date_range(definition, obj, data_source):
     if obj is None and definition.get("optional"):
         return {"start": None, "end": None}
 
@@ -117,13 +124,13 @@ def _handle_date_range(definition, obj):
         raise ValueError("Mismatched date range format, need dict with start and end: {!r}".format(obj))
 
     return {
-        "start":_handle_date(definition, obj["start"]),
-        "end": _handle_date(definition, obj["end"]),
+        "start":_handle_date(definition, obj["start"], data_source),
+        "end": _handle_date(definition, obj["end"], data_source),
     }
 
 
 def _handle_options(options_getter):
-    def _handle_options_wrapper(definition, value):
+    def _handle_options_wrapper(definition, value, data_source):
         allow_multiple_values = isinstance(definition.get("multiValuesOptions"), dict)
         optional = definition.get("optional")
 
@@ -140,7 +147,7 @@ def _handle_options(options_getter):
             if not set(values).issubset(options):
                 raise ValueError("Got invalid values for enum {!r}".format(set(values).difference(options)))
 
-            return _join_list_values(definition, values)
+            return _join_list_values(definition, values, data_source)
         else:
             if optional and value is None:
                 return None
@@ -150,14 +157,15 @@ def _handle_options(options_getter):
             if not str(value) in options:
                 raise ValueError("Got invalid value for enum {!r}".format(value))
 
-            return value
+            return _maybe_escape(definition, value, data_source)
     return _handle_options_wrapper
 
 
 class ParameterizedQuery(object):
-    def __init__(self, template, schema=None, org=None):
+    def __init__(self, template, schema=None, org=None, data_source=None):
         self.schema = schema or []
         self.org = org
+        self.data_source = data_source
         self.template = template
         self.query = template
         self.parameters = {}
@@ -219,11 +227,21 @@ class ParameterizedQuery(object):
         if not handle:
             raise TypeError("Unknown parameter type: {!r}".format(definition["type"]))
 
-        return handle(definition, value)
+        return handle(definition, value, self.data_source)
 
     @property
     def is_safe(self):
-        text_parameters = [param for param in self.schema if param["type"] == "text"]
+        text_parameters = [
+            param
+            for param in self.schema if (
+                param["type"] == "text"
+                and (
+                    self.data_source is None
+                    or not self.data_source.query_runner.supports_escape
+                    or not param.get("escape")
+                )
+            )
+        ]
         return not any(text_parameters)
 
     @property

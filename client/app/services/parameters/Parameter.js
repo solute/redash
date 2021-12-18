@@ -7,6 +7,7 @@ class Parameter {
     this.type = parameter.type;
     this.global = parameter.global; // backward compatibility in Widget service
     this.optional = parameter.optional;
+    this.escape = parameter.escape;
     this.parentQueryId = parentQueryId;
 
     // Used for meta-parameters (i.e. dashboard-level params)

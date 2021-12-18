@@ -6,6 +6,7 @@ from tempfile import NamedTemporaryFile
 from uuid import uuid4
 
 import psycopg2
+from psycopg2.sql import Literal
 from psycopg2.extras import Range
 
 from redash.query_runner import (
@@ -300,6 +301,18 @@ class PostgreSQL(BaseSQLQueryRunner):
             _cleanup_ssl_certs(self.ssl_config)
 
         return json_data, error
+
+    @property
+    def supports_escape(self):
+        return True
+
+    def escape_parameter(self, value):
+        conn = self._get_connection()
+        _wait(conn, timeout=10)
+        try:
+            return Literal(value).as_string(conn)[1:-1]
+        finally:
+            conn.close()
 
 
 class Redshift(PostgreSQL):

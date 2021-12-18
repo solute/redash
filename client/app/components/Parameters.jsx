@@ -24,6 +24,7 @@ export default class Parameters extends React.Component {
   static propTypes = {
     parameters: PropTypes.arrayOf(PropTypes.instanceOf(Parameter)),
     editable: PropTypes.bool,
+    dataSource: PropTypes.object.isRequired,
     sortable: PropTypes.bool,
     disableUrlUpdate: PropTypes.bool,
     onValuesChange: PropTypes.func,
@@ -119,9 +120,9 @@ export default class Parameters extends React.Component {
     });
   };
 
-  showParameterSettings = (parameter, index) => {
+  showParameterSettings = (parameter, index, dataSource) => {
     const { onParametersEdit } = this.props;
-    EditParameterSettingsDialog.showModal({ parameter }).onClose(updated => {
+    EditParameterSettingsDialog.showModal({ parameter, dataSource }).onClose(updated => {
       this.setState(({ parameters }) => {
         const updatedParameter = extend(parameter, updated);
         parameters[index] = createParameter(updatedParameter, updatedParameter.parentQueryId);
@@ -135,7 +136,7 @@ export default class Parameters extends React.Component {
     if (this.hideValues.some(value => this.toCamelCase(value) === this.toCamelCase(param.name))) {
       return null;
     }
-    const { editable } = this.props;
+    const { editable, dataSource } = this.props;
     if (param.hidden) {
       return null;
     }
@@ -147,7 +148,7 @@ export default class Parameters extends React.Component {
             <PlainButton
               className="btn btn-default btn-xs m-l-5"
               aria-label="Edit"
-              onClick={() => this.showParameterSettings(param, index)}
+              onClick={() => this.showParameterSettings(param, index, dataSource)}
               data-test={`ParameterSettings-${param.name}`}
               type="button">
               <i className="fa fa-cog" aria-hidden="true" />
