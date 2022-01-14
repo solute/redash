@@ -406,6 +406,9 @@ class QueryResult(db.Model, QueryResultPersistence, BelongsToOrgMixin):
 def should_schedule_next(previous_iteration, now, interval, time=None, day_of_week=None, failures=0):
     # if time exists then interval > 23 hours (82800s)
     # if day_of_week exists then interval > 6 days (518400s)
+    if previous_iteration is None:
+        previous_iteration = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
     if time is None:
         ttl = int(interval)
         next_iteration = previous_iteration + datetime.timedelta(seconds=ttl)
@@ -629,7 +632,7 @@ class Query(ChangeTrackingMixin, TimestampMixin, BelongsToOrgMixin, db.Model):
                 )
 
                 if should_schedule_next(
-                    retrieved_at or now,
+                    retrieved_at,
                     now,
                     query.schedule["interval"],
                     query.schedule["time"],
